@@ -5,4 +5,4 @@ import coop.rchain.rholang.build.CompiledRholangSource
 import scala.concurrent.duration._
 
 class PosSpec
-    extends RhoSpec(CompiledRholangSource("PosTest.rho"), Seq.empty, 10.seconds)
+    extends RhoSpec(CompiledRholangSource("PosTest.rho"), Seq(StandardDeploys.pos), 10.seconds)

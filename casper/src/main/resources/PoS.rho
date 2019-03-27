@@ -1,22 +1,24 @@
-//scalapackage coop.rchain.rholang.proofofstake
+/*
+The table below describes the required computations and their dependencies
 
-// No. | Dependency | Computation method | Result
-// ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
-// 1.  |            | given              | sk = 68b39a809d6a009d76593c26d4b897acfd34d40b2fa9639df4605a1317d3448e
-// 2.  |            | given              | timestamp = 1553702123276
-// 3.  |            | lastNonce          | nonce = 9223372036854775807
-// 4.  | 1,         | ed25519            | pk = da19138c71db4010e791f40cbf73fb1e5dda989a8f3f5bca83f324b6529c5869
-// 5.  | 4, 2,      | genIds             | uname = Unforgeable(0xb56db0764203ab770365c99e5e6abe90f4fa96768b4333e1858cbe847e8b3331)
-// 6.  | 3, 5,      | registry           | value = (9223372036854775807, bundle+ {   Unforgeable(0xb56db0764203ab770365c99e5e6abe90f4fa96768b4333e1858cbe847e8b3331) })
-// 7.  | 6,         | protobuf           | toSign = 2a3eaa013b0a0d2a0b10feffffffffffffffff010a2a5a280a243a220a20b56db0764203ab770365c99e5e6abe90f4fa96768b4333e1858cbe847e8b33311001
-// 8.  | 7, 1,      | ed25519            | sig = ed32eef76c52261643566de4a9305d3a63385598c66d800ace0002141243ba212eae6171a7d2899f60957c3cb497fa5eca84106b02e708e084867fc902003e03
-// 9.  | 4,         | registry           | uri = rho:id:w6koqnba5yr3f9hmtckihj4mj6q6wtre48w5j3n6nd314zwogyfmuf
-// ----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+No. | Dependency | Computation method | Result
+----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+1.  |            | given              | sk = 68b39a809d6a009d76593c26d4b897acfd34d40b2fa9639df4605a1317d3448e
+2.  |            | given              | timestamp = 1553702123276
+3.  |            | lastNonce          | nonce = 9223372036854775807
+4.  | 1,         | ed25519            | pk = da19138c71db4010e791f40cbf73fb1e5dda989a8f3f5bca83f324b6529c5869
+5.  | 4, 2,      | genIds             | uname = Unforgeable(0xbfda50b15aad23c8261201d791e43b1eee2454ba13c68e4c7e2cb3b722732058)
+6.  | 3, 5,      | registry           | value = (9223372036854775807, bundle+ {   Unforgeable(0xbfda50b15aad23c8261201d791e43b1eee2454ba13c68e4c7e2cb3b722732058) })
+7.  | 6,         | protobuf           | toSign = 2a3eaa013b0a0d2a0b10feffffffffffffffff010a2a5a280a243a220a20bfda50b15aad23c8261201d791e43b1eee2454ba13c68e4c7e2cb3b7227320581001
+8.  | 7, 1,      | ed25519            | sig = dddd311ebd975d6d1b3c7a08c0a4d54167c716c1a4051297f601e20b1cce423061d6cf7bc6d48df4227e1f8428559e18ecc27fc1180c9fb35a9c7d90f20e2901
+9.  | 4,         | registry           | uri = rho:id:w6koqnba5yr3f9hmtckihj4mj6q6wtre48w5j3n6nd314zwogyfmuf
+----+------------+--------------------+-----------------------------------------------------------------------------------------------------------------------------------------------------
+*/
 
 new MakePoS,
     rs(`rho:registry:insertSigned:ed25519`),
+    stdout(`rho:io:stdout`),
     uriOut in {
-
     contract MakePoS (@minimumBond, @maximumBond, @initialBonds, return) = {
 
         match "11112GofKy1v5mPWZjZEYBByvpZ4ahYJp6vFN1hgGCn7L543rFSpyA".hexToBytes() {
@@ -169,10 +171,15 @@ new MakePoS,
             }
         }
     } |
-    rs!(
-        "da19138c71db4010e791f40cbf73fb1e5dda989a8f3f5bca83f324b6529c5869".hexToBytes(),
-        (9223372036854775807, bundle+{*MakePoS}),
-        "ed32eef76c52261643566de4a9305d3a63385598c66d800ace0002141243ba212eae6171a7d2899f60957c3cb497fa5eca84106b02e708e084867fc902003e03".hexToBytes(),
-        *uriOut
-    )
+
+  rs!(
+    "da19138c71db4010e791f40cbf73fb1e5dda989a8f3f5bca83f324b6529c5869".hexToBytes(),
+    (9223372036854775807, bundle+{*MakePoS}),
+    "dddd311ebd975d6d1b3c7a08c0a4d54167c716c1a4051297f601e20b1cce423061d6cf7bc6d48df4227e1f8428559e18ecc27fc1180c9fb35a9c7d90f20e2901".hexToBytes(),
+    *uriOut
+  ) |
+  
+  for (@uri <- uriOut) {
+    stdout!("Pos ${unforgeableName} was registered at URI ${uri}" %% {"unforgeableName": *MakePoS, "uri": uri})
+  }
 }

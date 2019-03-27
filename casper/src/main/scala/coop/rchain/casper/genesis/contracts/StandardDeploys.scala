@@ -94,4 +94,11 @@ object StandardDeploys {
       "be8ae000e4d2f29c73f792705314d71b6c0d56d7c640c6b4df9fabf90518c623",
       1551879405043L
     )
+
+  def pos: DeployData =
+    toDeploy(
+      CompiledRholangSource("PoS.rho"),
+      "da19138c71db4010e791f40cbf73fb1e5dda989a8f3f5bca83f324b6529c5869",
+      1553702123276L
+    )
 }
