@@ -32,8 +32,7 @@ object GrpcTransportReceiver {
       serverSslContext: SslContext,
       maxMessageSize: Int,
       maxStreamMessageSize: Long,
-      tellBuffer: LimitedBuffer[Send],
-      blobBuffer: LimitedBuffer[StreamMessage],
+      buffer: LimitedBuffer[ServerMessage],
       askTimeout: FiniteDuration = 5.second,
       tempFolder: Path
   )(
@@ -51,7 +50,7 @@ object GrpcTransportReceiver {
               rPConfAsk.reader(_.local) >>= (
                   src =>
                     Task
-                      .delay(tellBuffer.pushNext(Send(protocol)))
+                      .delay(buffer.pushNext(Send(protocol)))
                       .ifM(
                         metrics.incrementCounter("enqueued.messages") >> Task
                           .delay(ack(src)),
@@ -80,7 +79,7 @@ object GrpcTransportReceiver {
             case Right(msg) =>
               metrics.incrementCounter("received.packets") >>
                 Task
-                  .delay(blobBuffer.pushNext(msg))
+                  .delay(buffer.pushNext(msg))
                   .ifM(
                     List(
                       logger.debug(s"Enqueued for handling packet ${msg.path}"),

@@ -56,8 +56,8 @@ class GrpcTransportServer(
       reporter = UncaughtExceptionLogger
     )
 
-  private val queueBlobScheduler =
-    Scheduler.singleThread("tl-dispatcher-server-blob", reporter = UncaughtExceptionLogger)
+//  private val queueBlobScheduler =
+//    Scheduler.singleThread("tl-dispatcher-server-blob", reporter = UncaughtExceptionLogger)
 
   private val serverSslContextTask: Task[SslContext] =
     Task
@@ -90,29 +90,29 @@ class GrpcTransportServer(
           case Right(blob) => handleStreamed(blob)
         }) >> metrics.incrementCounter("dispatched.packets")
 
+    val dispatchAll: ServerMessage => Task[Unit] = {
+      case s: Send          => dispatchSend(s)
+      case b: StreamMessage => dispatchBlob(b)
+    }
+
     for {
       serverSslContext <- serverSslContextTask
-      tellBuffer       <- Task.delay(buffer.LimitedBufferObservable.dropNew[Send](4096))
-      blobBuffer       <- Task.delay(buffer.LimitedBufferObservable.dropNew[StreamMessage](1024))
+      buffer           <- Task.delay(buffer.LimitedBufferObservable.dropNew[ServerMessage](4096))
       receiver <- GrpcTransportReceiver.create(
                    networkId: String,
                    port,
                    serverSslContext,
                    maxMessageSize,
                    maxStreamMessageSize,
-                   tellBuffer,
-                   blobBuffer,
+                   buffer,
                    tempFolder = tempFolder
                  )
-      tellConsumer <- Task.delay(
-                       tellBuffer
-                         .mapParallelUnordered(parallelism)(dispatchSend)
-                         .subscribe()(queueSendScheduler)
-                     )
-      blobConsumer <- Task.delay(
-                       blobBuffer.mapEval(dispatchBlob).subscribe()(queueBlobScheduler)
-                     )
-    } yield Cancelable.collection(receiver, tellConsumer, blobConsumer)
+      consumer <- Task.delay(
+                   buffer
+                     .mapParallelUnordered(parallelism)(dispatchAll)
+                     .subscribe()(queueSendScheduler)
+                 )
+    } yield Cancelable.collection(receiver, consumer)
   }
 }
 
