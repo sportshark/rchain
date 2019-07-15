@@ -145,6 +145,7 @@ class NodeRuntime private[node] (
                           .mountService(prometheusService, "/metrics")
                           .mountService(VersionInfo.service[Task], "/version")
                           .mountService(StatusInfo.service[Task], "/status")
+                          .mountService(MessageQueueInfo.service[Task], "/queue")
                           .resource
                           .use(_ => Task.never[Unit])
                           .start
