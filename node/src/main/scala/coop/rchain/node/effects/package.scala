@@ -90,4 +90,15 @@ package object effects {
       def ask: Task[PeerNode]            = state.get.map(_.local)
     }
 
+  def messageQueueMonitor: Task[MessageQueueMonitor[Task]] =
+    Cell
+      .mvarCell[Task, Map[Long, ServerMessage]](Map.empty)
+      .map { cell =>
+        new MessageQueueMonitor[Task] {
+          def added(id: Long, msg: ServerMessage): Task[Unit] = cell.modify(_ + (id -> msg))
+          def consumed(id: Long): Task[Unit]                  = cell.modify(_ - id)
+          def read: Task[Seq[ServerMessage]]                  = cell.read.map(_.toList.sortBy(_._1).map(_._2))
+          def size: Task[Int]                                 = cell.read.map(_.size)
+        }
+      }
 }
