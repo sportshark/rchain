@@ -41,7 +41,8 @@ class GrpcTransportServer(
     implicit scheduler: Scheduler,
     rPConfAsk: RPConfAsk[Task],
     log: Log[Task],
-    metrics: Metrics[Task]
+    metrics: Metrics[Task],
+    messageQueueMonitor: MessageQueueMonitor[Task]
 ) extends TransportLayerServer[Task] {
   private def certInputStream = new ByteArrayInputStream(cert.getBytes())
   private def keyInputStream  = new ByteArrayInputStream(key.getBytes())
@@ -90,14 +91,14 @@ class GrpcTransportServer(
           case Right(blob) => handleStreamed(blob)
         }) >> metrics.incrementCounter("dispatched.packets")
 
-    val dispatchAll: ServerMessage => Task[Unit] = {
-      case s: Send          => dispatchSend(s)
-      case b: StreamMessage => dispatchBlob(b)
+    val dispatchAll: ServerMessageWithId => Task[ServerMessageWithId] = {
+      case m @ ServerMessageWithId(_, s: Send)          => dispatchSend(s).as(m)
+      case m @ ServerMessageWithId(_, b: StreamMessage) => dispatchBlob(b).as(m)
     }
 
     for {
       serverSslContext <- serverSslContextTask
-      buffer           <- Task.delay(buffer.LimitedBufferObservable.dropNew[ServerMessage](4096))
+      buffer           <- Task.delay(buffer.LimitedBufferObservable.dropNew[ServerMessageWithId](4096))
       receiver <- GrpcTransportReceiver.create(
                    networkId: String,
                    port,
@@ -110,6 +111,7 @@ class GrpcTransportServer(
       consumer <- Task.delay(
                    buffer
                      .mapParallelUnordered(parallelism)(dispatchAll)
+                     .mapEval(m => messageQueueMonitor.consumed(m.id))
                      .subscribe()(queueSendScheduler)
                  )
     } yield Cancelable.collection(receiver, consumer)
@@ -130,7 +132,8 @@ object GrpcTransportServer {
       implicit scheduler: Scheduler,
       rPConfAsk: RPConfAsk[Task],
       log: Log[Task],
-      metrics: Metrics[Task]
+      metrics: Metrics[Task],
+      messageQueueMonitor: MessageQueueMonitor[Task]
   ): TransportServer = {
     val cert = Resources.withResource(Source.fromFile(certPath.toFile))(_.mkString)
     val key  = Resources.withResource(Source.fromFile(keyPath.toFile))(_.mkString)

@@ -21,9 +21,10 @@ class TcpTransportLayerSpec
     extends TransportLayerSpec[Task, TcpTlsEnvironment]
     with BeforeAndAfterEach {
 
-  implicit val log: Log[Task]         = new Log.NOPLog[Task]
-  implicit val scheduler: Scheduler   = Scheduler.Implicits.global
-  implicit val metrics: Metrics[Task] = new Metrics.MetricsNOP
+  implicit val log: Log[Task]                          = new Log.NOPLog[Task]
+  implicit val scheduler: Scheduler                    = Scheduler.Implicits.global
+  implicit val metrics: Metrics[Task]                  = new Metrics.MetricsNOP
+  implicit val queueMonitor: MessageQueueMonitor[Task] = MessageQueueMonitor.noop[Task]
 
   var tempFolder: Path = null
 

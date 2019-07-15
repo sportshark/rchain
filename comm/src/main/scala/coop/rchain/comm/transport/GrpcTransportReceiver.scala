@@ -32,14 +32,15 @@ object GrpcTransportReceiver {
       serverSslContext: SslContext,
       maxMessageSize: Int,
       maxStreamMessageSize: Long,
-      buffer: LimitedBuffer[ServerMessage],
+      buffer: LimitedBuffer[ServerMessageWithId],
       askTimeout: FiniteDuration = 5.second,
       tempFolder: Path
   )(
       implicit scheduler: Scheduler,
       rPConfAsk: RPConfAsk[Task],
       logger: Log[Task],
-      metrics: Metrics[Task]
+      metrics: Metrics[Task],
+      messageQueueMonitor: MessageQueueMonitor[Task]
   ): Task[Cancelable] =
     Task.delay {
       val service = new RoutingGrpcMonix.TransportLayer {
@@ -47,17 +48,15 @@ object GrpcTransportReceiver {
         def send(request: TLRequest): Task[TLResponse] =
           request.protocol
             .fold(internalServerError("protocol not available in request").pure[Task]) { protocol =>
-              rPConfAsk.reader(_.local) >>= (
-                  src =>
-                    Task
-                      .delay(buffer.pushNext(Send(protocol)))
-                      .ifM(
-                        metrics.incrementCounter("enqueued.messages") >> Task
-                          .delay(ack(src)),
-                        metrics.incrementCounter("dropped.messages") >> Task
-                          .delay(internalServerError("message dropped"))
-                      )
-                )
+              for {
+                src <- rPConfAsk.reader(_.local)
+                msg = ServerMessageWithId(System.currentTimeMillis(), Send(protocol))
+                enq <- Task.delay(buffer.pushNext(msg))
+                _ <- if (enq)
+                      messageQueueMonitor
+                        .added(msg.id, msg.msg) >> metrics.incrementCounter("enqueued.messages")
+                    else metrics.incrementCounter("dropped.messages")
+              } yield if (enq) ack(src) else internalServerError("message dropped")
             }
 
         private val circuitBreaker: StreamHandler.CircuitBreaker = streamed =>
@@ -76,21 +75,24 @@ object GrpcTransportReceiver {
               logger.error(error.message, t).as(internalServerError(error.message))
             case Left(error) =>
               logger.warn(error.message).as(internalServerError(error.message))
-            case Right(msg) =>
-              metrics.incrementCounter("received.packets") >>
-                Task
-                  .delay(buffer.pushNext(msg))
-                  .ifM(
-                    List(
-                      logger.debug(s"Enqueued for handling packet ${msg.path}"),
-                      metrics.incrementCounter("enqueued.packets")
-                    ).sequence,
-                    List(
-                      logger.debug(s"Dropped packet ${msg.path}"),
-                      metrics.incrementCounter("dropped.packets"),
-                      msg.path.deleteSingleFile[Task]
-                    ).sequence
-                  ) >> rPConfAsk.reader(c => ack(c.local))
+            case Right(streamMsg) =>
+              for {
+                _   <- metrics.incrementCounter("received.packets")
+                msg = ServerMessageWithId(System.currentTimeMillis(), streamMsg)
+                enq <- Task.delay(buffer.pushNext(msg))
+                _ <- if (enq)
+                      List(
+                        logger.debug(s"Enqueued for handling packet ${streamMsg.path}"),
+                        metrics.incrementCounter("enqueued.packets")
+                      ).sequence
+                    else
+                      List(
+                        logger.debug(s"Dropped packet ${streamMsg.path}"),
+                        metrics.incrementCounter("dropped.packets"),
+                        streamMsg.path.deleteSingleFile[Task]
+                      ).sequence
+                src <- rPConfAsk.reader(_.local)
+              } yield ack(src)
           }
         }
 

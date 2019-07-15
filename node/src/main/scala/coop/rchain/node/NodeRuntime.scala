@@ -93,6 +93,7 @@ class NodeRuntime private[node] (
       connectionsCell: ConnectionsCell[Task],
       concurrent: Concurrent[Task],
       metrics: Metrics[Task],
+      messageQueueMonitor: MessageQueueMonitor[Task],
       rPConfAsk: RPConfAsk[Task],
       span: Span[Task]
   ): Task[Servers] = {
@@ -117,7 +118,7 @@ class NodeRuntime private[node] (
                               conf.server.maxStreamMessageSize,
                               conf.server.dataDir.resolve("tmp").resolve("comm"),
                               conf.server.messageConsumers
-                            )(grpcScheduler, rPConfAsk, log, metrics)
+                            )(grpcScheduler, rPConfAsk, log, metrics, messageQueueMonitor)
                           )
 
       externalApiServer <- api
@@ -210,6 +211,7 @@ class NodeRuntime private[node] (
       rpConfAsk: RPConfAsk[Task],
       peerNodeAsk: PeerNodeAsk[Task],
       metrics: Metrics[Task],
+      messageQueueMonitor: MessageQueueMonitor[Task],
       span: Span[Task],
       transport: TransportLayer[Task],
       kademliaStore: KademliaStore[Task],
@@ -380,6 +382,7 @@ class NodeRuntime private[node] (
     peerNodeAsk          = effects.peerNodeAsk(rpConfState)
     rpConnections        <- effects.rpConnections
     metrics              = diagnostics.effects.metrics[Task]
+    queueMonitor         <- effects.messageQueueMonitor
     span                 <- setupSpan(conf.kamon.zipkin, conf.server.networkId, local.endpoint.host)
     time                 = effects.time
     timerTask            = Task.timer
@@ -540,6 +543,7 @@ class NodeRuntime private[node] (
       rpConfAsk,
       peerNodeAsk,
       metrics,
+      queueMonitor,
       span,
       transport,
       kademliaStore,

@@ -6,7 +6,7 @@ import coop.rchain.comm.protocol.routing.Protocol
 import monix.execution.Callback
 import coop.rchain.comm.PeerNode
 
-trait ServerMessage
+sealed trait ServerMessage
 final case class Send(msg: Protocol) extends ServerMessage
 final case class StreamMessage(
     sender: PeerNode,
@@ -15,3 +15,5 @@ final case class StreamMessage(
     compressed: Boolean,
     contentLength: Int
 ) extends ServerMessage
+
+final case class ServerMessageWithId(id: Long, msg: ServerMessage)
