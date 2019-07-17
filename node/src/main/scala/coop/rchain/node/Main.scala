@@ -191,6 +191,9 @@ object Main {
       _             <- checkHost(conf)
       confWithPorts <- checkPorts(conf)
       _             <- log.info(VersionInfo.get)
+      _             <- log.info(s"Max native memory = ${sun.misc.VM.maxDirectMemory()}")
+      mcbfs         = Option(System.getProperty("jdk.nio.maxCachedBufferSize")).filter(_.nonEmpty)
+      _             <- log.info(s"Max cached buffer size = ${mcbfs.getOrElse("N/A")}")
       _             <- logConfiguration(confWithPorts)
       runtime       <- NodeRuntime(confWithPorts)
       _             <- runtime.main
