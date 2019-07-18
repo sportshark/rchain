@@ -502,7 +502,6 @@ class NodeRuntime private[node] (
     raiseIOError = IOError.raiseIOErrorThroughSync[Task]
     casperInit = new CasperInit[Task](
       conf.casper,
-      runtimeManager,
       conf.kamon.zipkin
     )
     _ <- CasperLaunch[Task](casperInit, identity)(
@@ -526,6 +525,7 @@ class NodeRuntime private[node] (
           engineCell,
           envVars,
           raiseIOError,
+          runtimeManager,
           scheduler
         )
     packetHandler = {
